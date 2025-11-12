@@ -1,4 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { UserStatus } from 'src/enums/user-status.enum';
 
 @Schema({ timestamps: true })
 export class User {
@@ -27,13 +28,14 @@ export class User {
   @Prop({
     type: String,
     default: null,
+    required: false,
   })
-  avatarUrl: string;
+  avatarUrl?: string;
 
   @Prop({
     type: String,
-    enum: ['online', 'offline'],
-    default: 'offline',
+    enum: Object.values(UserStatus),
+    default: UserStatus.OFFLINE,
   })
   status: 'online' | 'offline';
 }

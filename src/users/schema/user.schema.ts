@@ -37,7 +37,7 @@ export class User {
     enum: Object.values(UserStatus),
     default: UserStatus.OFFLINE,
   })
-  status: 'online' | 'offline';
+  status: UserStatus;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

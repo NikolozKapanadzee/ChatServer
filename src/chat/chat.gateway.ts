@@ -1,45 +1,78 @@
 import {
-  ConnectedSocket,
-  MessageBody,
-  OnGatewayConnection,
-  SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
+  SubscribeMessage,
+  MessageBody,
+  ConnectedSocket,
+  OnGatewayConnection,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
+import { ChatService } from './chat.service';
+import { SendMessageDto } from './dto/send-message.dto';
 
 @WebSocketGateway({
-  cors: {
-    origin: '*',
-  },
+  cors: { origin: '*' },
 })
-export class Gateway implements OnGatewayConnection {
-  @WebSocketServer()
-  private server: Server;
+export class ChatGateway implements OnGatewayConnection {
+  @WebSocketServer() server: Server;
 
-  handleConnection(client: any, ...args: any[]) {
-    console.log(`Connected ${client.id}`);
+  constructor(private readonly chatService: ChatService) {}
+
+  handleConnection(client: Socket) {
+    console.log(`Client connected: ${client.id}`);
   }
 
-  @SubscribeMessage('echo')
-  echoServer(@MessageBody() body: any, @ConnectedSocket() client: Socket) {
-    console.log(body);
-    client.emit('echo', body);
-  }
-
-  @SubscribeMessage('send_public_message')
-  sendPublicMessage(@MessageBody() body: any) {
-    this.server.emit('send_public_message', body);
-  }
-  @SubscribeMessage('join_room')
-  joinRoom(
-    @MessageBody() { roomId }: { roomId: string },
+  @SubscribeMessage('send_global_message')
+  async handleGlobalMessage(
+    @MessageBody() body: SendMessageDto,
     @ConnectedSocket() client: Socket,
   ) {
-    client.join(roomId);
+    try {
+      const message = await this.chatService.sendMessage(
+        body.senderId,
+        body.content,
+      );
+
+      this.server.emit('receive_global_message', message);
+    } catch (error) {
+      console.error('Error sending message:', error);
+      client.emit('error', { message: error.message });
+    }
   }
+
   @SubscribeMessage('send_private_message')
-  sendPrivateMessage(@MessageBody() { roomId, msg }) {
-    this.server.to(roomId).emit('send_private_message', { msg });
+  async handlePrivateMessage(
+    @MessageBody() body: SendMessageDto,
+    @ConnectedSocket() client: Socket,
+  ) {
+    if (!body.receiverId) {
+      client.emit('error', {
+        message: 'receiverId is required for private messages',
+      });
+      return;
+    }
+
+    const message = await this.chatService.sendMessage(
+      body.senderId,
+      body.content,
+      body.receiverId,
+    );
+
+    const roomName = this.getPrivateRoomName(body.senderId, body.receiverId);
+    this.server.to(roomName).emit('receive_private_message', message);
+  }
+
+  private getPrivateRoomName(user1: string, user2: string) {
+    return [user1, user2].sort().join('_');
+  }
+
+  @SubscribeMessage('join_private_room')
+  handleJoinRoom(
+    @MessageBody() { userId, friendId }: { userId: string; friendId: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    const room = this.getPrivateRoomName(userId, friendId);
+    client.join(room);
+    console.log(`User ${userId} joined room ${room}`);
   }
 }

@@ -1,26 +1,45 @@
 import { Injectable } from '@nestjs/common';
-import { CreateChatDto } from './dto/create-chat.dto';
-import { UpdateChatDto } from './dto/update-chat.dto';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { Message } from './schema/message.schema';
+import { Conversation } from './schema/conversation.schema';
+import { ChatType } from 'src/enums/chat-type.enum';
 
 @Injectable()
 export class ChatService {
-  create(createChatDto: CreateChatDto) {
-    return 'This action adds a new chat';
-  }
+  constructor(
+    @InjectModel(Message.name) private messageModel: Model<Message>,
+    @InjectModel(Conversation.name) private convModel: Model<Conversation>,
+  ) {}
 
-  findAll() {
-    return `This action returns all chat`;
-  }
+  async sendMessage(senderId: string, content: string, receiverId?: string) {
+    let conversation;
 
-  findOne(id: number) {
-    return `This action returns a #${id} chat`;
-  }
+    if (receiverId) {
+      conversation = await this.convModel.findOne({
+        type: ChatType.PRIVATE,
+        participants: { $all: [senderId, receiverId] },
+      });
 
-  update(id: number, updateChatDto: UpdateChatDto) {
-    return `This action updates a #${id} chat`;
-  }
+      if (!conversation) {
+        conversation = await this.convModel.create({
+          type: ChatType.PRIVATE,
+          participants: [senderId, receiverId],
+        });
+      }
+    } else {
+      conversation = await this.convModel.findOne({ type: ChatType.GLOBAL });
+      if (!conversation) {
+        conversation = await this.convModel.create({ type: ChatType.GLOBAL });
+      }
+    }
 
-  remove(id: number) {
-    return `This action removes a #${id} chat`;
+    const message = await this.messageModel.create({
+      conversation: conversation._id,
+      sender: senderId,
+      content,
+    });
+
+    return message.populate('sender', 'username');
   }
 }

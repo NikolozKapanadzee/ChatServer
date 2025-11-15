@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { Message } from './schema/message.schema';
 import { Conversation } from './schema/conversation.schema';
 import { ChatType } from 'src/enums/chat-type.enum';
@@ -38,6 +38,8 @@ export class ChatService {
       conversation: conversation._id,
       sender: senderId,
       content,
+      receiverId: receiverId ? new Types.ObjectId(receiverId) : null,
+      type: receiverId ? ChatType.PRIVATE : ChatType.GLOBAL,
     });
 
     return message.populate('sender', 'username');

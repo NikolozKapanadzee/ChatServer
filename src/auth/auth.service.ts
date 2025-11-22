@@ -10,6 +10,7 @@ import { User } from 'src/users/schema/user.schema';
 import * as bcrypt from 'bcrypt';
 import { SignInDto } from './dto/sign-in.dto';
 import { JwtService } from '@nestjs/jwt';
+import { AwsService } from 'src/aws/aws.service';
 
 @Injectable()
 export class AuthService {
@@ -17,6 +18,9 @@ export class AuthService {
     @InjectModel(User.name) private userModel: Model<User>,
     private jwtService: JwtService,
   ) {}
+  private awsService: AwsService;
+
+  async uploadFile(file: Express.Multer.File) {}
 
   async signUp(signUpDto: SignUpDto) {
     const { email, password, avatarUrl, username } = signUpDto;

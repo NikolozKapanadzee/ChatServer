@@ -5,9 +5,11 @@ import { User, UserSchema } from 'src/users/schema/user.schema';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
+import { AwsModule } from 'src/aws/aws.module';
 
 @Module({
   imports: [
+    AwsModule,
     MongooseModule.forFeature([{ schema: UserSchema, name: User.name }]),
     ConfigModule.forRoot(),
     JwtModule.register({ global: true, secret: process.env.JWT_SECRET }),

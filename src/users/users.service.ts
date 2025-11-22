@@ -8,23 +8,12 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { InjectModel } from '@nestjs/mongoose';
 import { User } from './schema/user.schema';
 import { isValidObjectId, Model } from 'mongoose';
+import { AwsService } from 'src/aws/aws.service';
 
 @Injectable()
 export class UsersService {
   constructor(@InjectModel(User.name) private userModel: Model<User>) {}
-  async create(createUserDto: CreateUserDto) {
-    const { email, password, username } = createUserDto;
-    const existUser = await this.userModel.findOne({ email });
-    if (existUser) {
-      throw new BadRequestException('User Already Exist');
-    }
-    const newUser = await this.userModel.create({ email, password, username });
-    return {
-      message: 'user created successfully',
-      data: newUser,
-    };
-  }
-
+  private awsService: AwsService;
   async findAll() {
     return this.userModel.find();
   }

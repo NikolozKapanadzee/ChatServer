@@ -1,5 +1,5 @@
-import { S3Client } from '@aws-sdk/client-s3';
-import { Injectable } from '@nestjs/common';
+import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { BadRequestException, Injectable } from '@nestjs/common';
 
 @Injectable()
 export class AwsService {
@@ -15,5 +15,20 @@ export class AwsService {
       },
       region: process.env.AWS_REGION,
     });
+  }
+
+  async uploadFile(fileId, file) {
+    if (!fileId || !file) {
+      throw new BadRequestException('file is required');
+    }
+    const config = {
+      Key: fileId,
+      Body: file.buffer,
+      Bucket: this.bucketName,
+      ContentType: file.mimetype,
+    };
+    const uploadCommand = new PutObjectCommand(config);
+    await this.s3.send(uploadCommand);
+    return fileId;
   }
 }

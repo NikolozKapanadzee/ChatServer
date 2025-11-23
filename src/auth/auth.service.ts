@@ -20,15 +20,22 @@ export class AuthService {
     private awsService: AwsService,
   ) {}
 
-  async uploadFile(file: Express.Multer.File) {
-    const fileType = file.mimetype.split('/')[1];
-    const fileId = `avatars/${uuidv4()}.${fileType}`;
-    await this.awsService.uploadFile(fileId, file);
-    return fileId;
-  }
+  // async uploadFile(file: Express.Multer.File) {
+  //   const fileType = file.mimetype.split('/')[1];
+  //   const fileId = `avatars/${uuidv4()}.${fileType}`;
+  //   await this.awsService.uploadFile(fileId, file);
+  //   return fileId;
+  // }
 
-  async signUp(signUpDto: SignUpDto) {
-    const { email, password, avatarUrl, username } = signUpDto;
+  async signUp(signUpDto: SignUpDto, file?: Express.Multer.File) {
+    const { email, password, username } = signUpDto;
+    let fileId: string | null = null;
+    if (file) {
+      const fileType = file.mimetype.split('/')[1];
+      fileId = `avatars/${uuidv4()}.${fileType}`;
+      await this.awsService.uploadFile(fileId, file);
+    }
+
     const existUser = await this.userModel.findOne({ email });
     if (existUser) {
       throw new BadRequestException('user already exist');
@@ -41,7 +48,7 @@ export class AuthService {
     const newUser = await this.userModel.create({
       email,
       password: hashedPass,
-      avatarUrl,
+      avatarUrl: fileId,
       username,
     });
     const newUserWithoutPassword = await this.userModel

@@ -18,16 +18,20 @@ import { FileInterceptor } from '@nestjs/platform-express';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @Post('upload')
-  @UseInterceptors(FileInterceptor('file'))
-  uploadFile(@UploadedFile() file: Express.Multer.File) {
-    console.log(file);
-    return this.authService.uploadFile(file);
-  }
+  // @Post('upload')
+  // @UseInterceptors(FileInterceptor('file'))
+  // uploadFile(@UploadedFile() file: Express.Multer.File) {
+  //   console.log(file);
+  //   return this.authService.uploadFile(file);
+  // }
 
   @Post('sign-up')
-  signUp(@Body() signUpDto: SignUpDto) {
-    return this.authService.signUp(signUpDto);
+  @UseInterceptors(FileInterceptor('file'))
+  signUp(
+    @Body() signUpDto: SignUpDto,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    return this.authService.signUp(signUpDto, file);
   }
   @Post('sign-in')
   signIn(@Body() signInDto: SignInDto) {

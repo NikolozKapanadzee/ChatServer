@@ -11,16 +11,21 @@ import * as bcrypt from 'bcrypt';
 import { SignInDto } from './dto/sign-in.dto';
 import { JwtService } from '@nestjs/jwt';
 import { AwsService } from 'src/aws/aws.service';
-
+import { v4 as uuidv4 } from 'uuid';
 @Injectable()
 export class AuthService {
   constructor(
     @InjectModel(User.name) private userModel: Model<User>,
     private jwtService: JwtService,
+    private awsService: AwsService,
   ) {}
-  private awsService: AwsService;
 
-  async uploadFile(file: Express.Multer.File) {}
+  async uploadFile(file: Express.Multer.File) {
+    const fileType = file.mimetype.split('/')[1];
+    const fileId = `avatars/${uuidv4()}.${fileType}`;
+    await this.awsService.uploadFile(fileId, file);
+    return fileId;
+  }
 
   async signUp(signUpDto: SignUpDto) {
     const { email, password, avatarUrl, username } = signUpDto;

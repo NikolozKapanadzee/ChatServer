@@ -1,4 +1,8 @@
-import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import { BadRequestException, Injectable } from '@nestjs/common';
 
 @Injectable()
@@ -30,5 +34,16 @@ export class AwsService {
     const uploadCommand = new PutObjectCommand(config);
     await this.s3.send(uploadCommand);
     return fileId;
+  }
+
+  async getFileById(fileId) {
+    if (!fileId) throw new BadRequestException('fileId is required');
+    const config = {
+      Key: fileId,
+      Bucket: this.bucketName,
+    };
+    const getCommand = new GetObjectCommand(config);
+    const fileStream = await this.s3.send(getCommand);
+    console.log(fileStream);
   }
 }

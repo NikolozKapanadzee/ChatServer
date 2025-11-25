@@ -4,12 +4,15 @@ import { Model, Types } from 'mongoose';
 import { Message } from './schema/message.schema';
 import { Conversation } from './schema/conversation.schema';
 import { ChatType } from 'src/enums/chat-type.enum';
+import { UserStatus } from 'src/enums/user-status.enum';
+import { User } from 'src/users/schema/user.schema';
 
 @Injectable()
 export class ChatService {
   constructor(
     @InjectModel(Message.name) private messageModel: Model<Message>,
     @InjectModel(Conversation.name) private convModel: Model<Conversation>,
+    @InjectModel(User.name) private userModel: Model<User>,
   ) {}
 
   async sendMessage(senderId: string, content: string) {
@@ -30,6 +33,12 @@ export class ChatService {
     });
 
     return message.populate('sender', 'username avatarUrl');
+  }
+
+  async updateUserStatus(userId: string, status: UserStatus) {
+    return await this.userModel
+      .findByIdAndUpdate(userId, { status }, { new: true })
+      .select('-password');
   }
 
   async sendPrivateMessage(

@@ -5,23 +5,41 @@ import {
   MessageBody,
   ConnectedSocket,
   OnGatewayConnection,
+  OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { ChatService } from './chat.service';
 import { SendMessageDto } from './dto/send-message.dto';
 import { UseGuards } from '@nestjs/common';
 import { WsJwtGuard } from 'src/guards/ws-jwt.guard';
+import { UserStatus } from 'src/enums/user-status.enum';
 
 @WebSocketGateway({
   cors: { origin: '*' },
 })
-export class ChatGateway implements OnGatewayConnection {
+export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer() server: Server;
 
   constructor(private readonly chatService: ChatService) {}
 
-  handleConnection(client: Socket) {
+  async handleConnection(client: Socket) {
     console.log(`Client connected: ${client.id}`);
+  }
+
+  async handleDisconnect(client: Socket) {
+    console.log(`Client disconnected: ${client.id}`);
+
+    if (client.data.user?.id) {
+      await this.chatService.updateUserStatus(
+        client.data.user.id,
+        UserStatus.OFFLINE,
+      );
+
+      this.server.emit('user_status_changed', {
+        userId: client.data.user.id,
+        status: UserStatus.OFFLINE,
+      });
+    }
   }
 
   @UseGuards(WsJwtGuard)
@@ -75,7 +93,7 @@ export class ChatGateway implements OnGatewayConnection {
 
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('join_private_room')
-  handleJoinRoom(
+  async handleJoinRoom(
     @MessageBody() { friendId }: { friendId: string },
     @ConnectedSocket() client: Socket,
   ) {
@@ -83,5 +101,19 @@ export class ChatGateway implements OnGatewayConnection {
     const room = this.getPrivateRoomName(userId, friendId);
     client.join(room);
     console.log(`User ${userId} joined room ${room}`);
+  }
+  @UseGuards(WsJwtGuard)
+  @SubscribeMessage('user_connected')
+  async handleUserConnected(@ConnectedSocket() client: Socket) {
+    const userId = client.data.user.id;
+
+    await this.chatService.updateUserStatus(userId, UserStatus.ONLINE);
+
+    this.server.emit('user_status_changed', {
+      userId: userId,
+      status: UserStatus.ONLINE,
+    });
+
+    console.log(`User ${userId} is now ONLINE`);
   }
 }

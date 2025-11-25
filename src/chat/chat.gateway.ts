@@ -1,18 +1,20 @@
 import {
   WebSocketGateway,
   WebSocketServer,
-  SubscribeMessage,
-  MessageBody,
-  ConnectedSocket,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  SubscribeMessage,
+  ConnectedSocket,
+  MessageBody,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { ChatService } from './chat.service';
-import { SendMessageDto } from './dto/send-message.dto';
 import { UseGuards } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import { UnauthorizedException } from '@nestjs/common';
+import { ChatService } from './chat.service';
 import { WsJwtGuard } from 'src/guards/ws-jwt.guard';
 import { UserStatus } from 'src/enums/user-status.enum';
+import { SendMessageDto } from './dto/send-message.dto';
 
 @WebSocketGateway({
   cors: { origin: '*' },
@@ -20,26 +22,50 @@ import { UserStatus } from 'src/enums/user-status.enum';
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer() server: Server;
 
-  constructor(private readonly chatService: ChatService) {}
+  constructor(
+    private readonly jwtService: JwtService,
+    private readonly chatService: ChatService,
+  ) {}
 
   async handleConnection(client: Socket) {
-    console.log(`Client connected: ${client.id}`);
+    try {
+      const token =
+        client.handshake.auth?.token ||
+        client.handshake.headers.authorization?.split(' ')[1];
+
+      if (!token) throw new UnauthorizedException('Missing token');
+
+      const decoded = this.jwtService.verify(token);
+      client.data.user = decoded;
+      client.data.token = token;
+
+      await this.chatService.updateUserStatus(decoded.id, UserStatus.ONLINE);
+
+      this.server.emit('user_status_changed', {
+        userId: decoded.id,
+        status: UserStatus.ONLINE,
+      });
+
+      console.log(`User ${decoded.id} connected → ONLINE`);
+    } catch (e) {
+      console.log('WS connection rejected:', e.message);
+      client.disconnect();
+    }
   }
 
   async handleDisconnect(client: Socket) {
-    console.log(`Client disconnected: ${client.id}`);
+    const userId = client.data.user?.id;
 
-    if (client.data.user?.id) {
-      await this.chatService.updateUserStatus(
-        client.data.user.id,
-        UserStatus.OFFLINE,
-      );
+    if (!userId) return;
 
-      this.server.emit('user_status_changed', {
-        userId: client.data.user.id,
-        status: UserStatus.OFFLINE,
-      });
-    }
+    await this.chatService.updateUserStatus(userId, UserStatus.OFFLINE);
+
+    this.server.emit('user_status_changed', {
+      userId,
+      status: UserStatus.OFFLINE,
+    });
+
+    console.log(`User ${userId} disconnected → OFFLINE`);
   }
 
   @UseGuards(WsJwtGuard)
@@ -48,14 +74,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() body: SendMessageDto,
     @ConnectedSocket() client: Socket,
   ) {
-    try {
-      const userId = client.data.user.id;
-      const message = await this.chatService.sendMessage(userId, body.content);
-      this.server.emit('receive_global_message', message);
-    } catch (error) {
-      console.error('Error sending message:', error);
-      client.emit('error', { message: error.message });
-    }
+    const userId = client.data.user.id;
+    const message = await this.chatService.sendMessage(userId, body.content);
+
+    this.server.emit('receive_global_message', message);
   }
 
   @UseGuards(WsJwtGuard)
@@ -64,56 +86,32 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() body: SendMessageDto,
     @ConnectedSocket() client: Socket,
   ) {
-    if (!body.receiverId) {
-      client.emit('error', {
-        message: 'receiverId is required for private messages',
-      });
-      return;
-    }
-    try {
-      const userId = client.data.user.id;
+    if (!body.receiverId) return;
 
-      const message = await this.chatService.sendPrivateMessage(
-        userId,
-        body.receiverId,
-        body.content,
-      );
+    const userId = client.data.user.id;
 
-      const roomName = this.getPrivateRoomName(userId, body.receiverId);
-      this.server.to(roomName).emit('receive_private_message', message);
-    } catch (error) {
-      console.error('Error in private message:', error);
-      client.emit('error', { message: error.message });
-    }
-  }
+    const message = await this.chatService.sendPrivateMessage(
+      userId,
+      body.receiverId,
+      body.content,
+    );
 
-  private getPrivateRoomName(user1: string, user2: string) {
-    return [user1, user2].sort().join('_');
+    const room = this.getPrivateRoomName(userId, body.receiverId);
+    this.server.to(room).emit('receive_private_message', message);
   }
 
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('join_private_room')
-  async handleJoinRoom(
+  async joinRoom(
     @MessageBody() { friendId }: { friendId: string },
     @ConnectedSocket() client: Socket,
   ) {
-    const userId = client.data.user.id;
-    const room = this.getPrivateRoomName(userId, friendId);
+    const room = this.getPrivateRoomName(client.data.user.id, friendId);
     client.join(room);
-    console.log(`User ${userId} joined room ${room}`);
+
+    console.log(`User ${client.data.user.id} joined room ${room}`);
   }
-  @UseGuards(WsJwtGuard)
-  @SubscribeMessage('user_connected')
-  async handleUserConnected(@ConnectedSocket() client: Socket) {
-    const userId = client.data.user.id;
-
-    await this.chatService.updateUserStatus(userId, UserStatus.ONLINE);
-
-    this.server.emit('user_status_changed', {
-      userId: userId,
-      status: UserStatus.ONLINE,
-    });
-
-    console.log(`User ${userId} is now ONLINE`);
+  private getPrivateRoomName(a: string, b: string) {
+    return [a, b].sort().join('_');
   }
 }

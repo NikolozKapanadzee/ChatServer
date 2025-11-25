@@ -39,6 +39,7 @@ export class ChatGateway implements OnGatewayConnection {
       client.emit('error', { message: error.message });
     }
   }
+
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('send_private_message')
   async handlePrivateMessage(
@@ -53,11 +54,13 @@ export class ChatGateway implements OnGatewayConnection {
     }
     try {
       const userId = client.data.user.id;
-      const message = await this.chatService.sendMessage(
+
+      const message = await this.chatService.sendPrivateMessage(
         userId,
-        body.content,
         body.receiverId,
+        body.content,
       );
+
       const roomName = this.getPrivateRoomName(userId, body.receiverId);
       this.server.to(roomName).emit('receive_private_message', message);
     } catch (error) {
@@ -65,9 +68,11 @@ export class ChatGateway implements OnGatewayConnection {
       client.emit('error', { message: error.message });
     }
   }
+
   private getPrivateRoomName(user1: string, user2: string) {
     return [user1, user2].sort().join('_');
   }
+
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('join_private_room')
   handleJoinRoom(

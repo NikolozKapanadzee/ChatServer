@@ -16,6 +16,11 @@ export class Conversation extends Document {
     default: [],
   })
   participants: Types.ObjectId[];
+  @Prop({
+    type: [{ type: Types.ObjectId, ref: 'Message' }],
+    default: [],
+  })
+  messages: Types.ObjectId[];
 }
 
 export const ConversationSchema = SchemaFactory.createForClass(Conversation);
